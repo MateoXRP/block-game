@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-export default function Tile({ emoji, onClick, isSelected, isFading, fromRow, actualRow }) {
+export default function Tile({ emoji, isSelected, isFading, fromRow, actualRow, onClick }) {
   const ref = useRef(null);
   const [shouldAnimate, setShouldAnimate] = useState(false);
 
@@ -9,9 +9,7 @@ export default function Tile({ emoji, onClick, isSelected, isFading, fromRow, ac
 
   useEffect(() => {
     if (ref.current) {
-      // Set base position immediately
       ref.current.style.transform = `translateY(${fallPixels}px)`;
-      // Force layout reflow, then apply transition
       requestAnimationFrame(() => {
         setShouldAnimate(true);
       });
@@ -24,7 +22,7 @@ export default function Tile({ emoji, onClick, isSelected, isFading, fromRow, ac
       className={`w-12 h-12 text-2xl flex items-center justify-center border border-white cursor-pointer
         ${shouldAnimate ? 'tile-animating' : ''}
         ${isSelected ? 'bg-white text-black scale-110' : ''}
-        ${isFading ? 'fade-out' : ''}
+        ${isFading ? 'bg-yellow-400 text-black' : ''}
       `}
       style={{
         transform: shouldAnimate ? 'translateY(0)' : undefined,

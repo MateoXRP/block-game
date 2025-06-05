@@ -4,7 +4,7 @@ import { swapTiles, findMatches } from '../logic/boardUtils.js';
 import { nanoid } from 'nanoid';
 
 const BOARD_SIZE = 6;
-const FADE_DELAY = 200;
+const PAUSE_DELAY = 300;
 const FALL_DELAY = 200;
 
 const createTile = (emoji, fromRow = undefined) => ({
@@ -23,7 +23,7 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
   const [animatedBoard, setAnimatedBoard] = useState(board.map((row, r) =>
     row.map((emoji) => createTile(emoji, r))
   ));
-  const [fadingIds, setFadingIds] = useState(new Set());
+  const [highlightIds, setHighlightIds] = useState(new Set());
 
   const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
@@ -35,22 +35,19 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
       const matches = findMatches(current.map(row => row.map(tile => tile.emoji)));
       if (matches.length === 0) break;
 
-      const fading = new Set(matches.map(([r, c]) => current[r][c].id));
-      setFadingIds(fading);
-      setAnimatedBoard(current);
-      await delay(FADE_DELAY);
+      const matchIds = new Set(matches.map(([r, c]) => current[r][c].id));
+      setHighlightIds(matchIds);
+      await delay(PAUSE_DELAY); // pause visibly
 
-      const boardWithGaps = current.map((row, r) =>
-        row.map((tile, c) =>
-          matches.find(([mr, mc]) => mr === r && mc === c) ? null : tile
-        )
+      const boardWithGaps = current.map(row =>
+        row.map(tile => (tile && matchIds.has(tile.id) ? null : tile))
       );
-      setFadingIds(new Set());
-      setAnimatedBoard(boardWithGaps);
 
-      const { newBoard } = clearAndFall(boardWithGaps, matches);
+      setHighlightIds(new Set());
+
+      const { newBoard } = clearAndFall(boardWithGaps);
       setAnimatedBoard(newBoard);
-      await delay(FALL_DELAY + 50); // ensure visual drop finishes
+      await delay(FALL_DELAY + 50);
 
       const cleanedBoard = newBoard.map(row =>
         row.map(tile => ({ id: tile.id, emoji: tile.emoji }))
@@ -80,7 +77,7 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
     onAnimationsComplete();
   };
 
-  const clearAndFall = (tileBoard, matches) => {
+  const clearAndFall = (tileBoard) => {
     const newBoard = tileBoard.map(row => [...row]);
 
     for (let c = 0; c < BOARD_SIZE; c++) {
@@ -107,7 +104,9 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
     return { newBoard };
   };
 
-  const handleTileClick = (r, c) => {
+  const handleTileClick = async (r, c) => {
+    if (!animatedBoard[r][c]) return;
+
     if (!selected) {
       setSelected([r, c]);
     } else if (selected[0] === r && selected[1] === c) {
@@ -119,16 +118,18 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
         (Math.abs(c - c1) === 1 && r === r1);
 
       if (isAdjacent) {
-        const cloned = animatedBoard.map(row => [...row]);
+        const cloned = animatedBoard.map(row => row.map(tile => ({ ...tile })));
         const swapped = swapTiles(cloned, [r, c], selected);
         const match = findMatches(swapped.map(row => row.map(tile => tile.emoji)));
 
         if (match.length > 0) {
+          setAnimatedBoard(swapped);
+          await new Promise(resolve => requestAnimationFrame(resolve));
           handleResolve(swapped);
         } else {
           setAnimatedBoard(swapped);
           setBoard(swapped.map(row => row.map(tile => tile.emoji)));
-          onAnimationsComplete(); // still call complete if no match
+          onAnimationsComplete();
         }
         setSelected(null);
       } else {
@@ -147,7 +148,7 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
                 key={tile.id}
                 emoji={tile.emoji}
                 isSelected={selected?.[0] === r && selected?.[1] === c}
-                isFading={fadingIds.has(tile.id)}
+                isFading={highlightIds.has(tile.id)}
                 fromRow={tile.fromRow}
                 actualRow={r}
                 onClick={() => handleTileClick(r, c)}
