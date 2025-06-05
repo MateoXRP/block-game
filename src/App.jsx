@@ -22,7 +22,6 @@ export default function App() {
   const [totalCleared, setTotalCleared] = useState(0);
   const timerRef = useRef(null);
 
-  // Start countdown timer
   useEffect(() => {
     if (isGameOver || isLevelTransition) return;
 
@@ -40,17 +39,15 @@ export default function App() {
     return () => clearInterval(timerRef.current);
   }, [level, isGameOver, isLevelTransition]);
 
-  const delay = (ms) => new Promise(res => setTimeout(res, ms));
-
   const handleClearBlocks = (count) => {
     setTotalCleared((prev) => prev + count);
-    setBlocksRemaining((prev) => {
-      const updated = prev - count;
-      if (updated <= 0) {
-        triggerLevelTransition();
-      }
-      return updated;
-    });
+    setBlocksRemaining((prev) => prev - count);
+  };
+
+  const handleAnimationsComplete = () => {
+    if (blocksRemaining <= 0) {
+      triggerLevelTransition();
+    }
   };
 
   const applyTimeBonus = (seconds) => {
@@ -127,6 +124,7 @@ export default function App() {
             onClear={handleClearBlocks}
             onLog={logMessage}
             onTimeBonus={applyTimeBonus}
+            onAnimationsComplete={handleAnimationsComplete}
           />
           <MessageLog messages={messages} />
         </>
@@ -135,7 +133,6 @@ export default function App() {
   );
 }
 
-// Ensures board starts without any matches
 function generateCleanBoard(rows = 6, cols = 6) {
   let board;
   do {

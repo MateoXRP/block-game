@@ -1,50 +1,72 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Tile from './Tile.jsx';
-import {
-  swapTiles,
-  findMatches,
-  clearMatches,
-} from '../logic/boardUtils.js';
+import { swapTiles, findMatches } from '../logic/boardUtils.js';
+import { nanoid } from 'nanoid';
 
 const BOARD_SIZE = 6;
-const ANIMATION_DELAY = 250;
+const FADE_DELAY = 200;
+const FALL_DELAY = 200;
 
-export default function Board({ board, setBoard, onClear, onLog, onTimeBonus }) {
+const createTile = (emoji, fromRow = undefined) => ({
+  id: nanoid(),
+  emoji,
+  fromRow,
+});
+
+const getRandomEmoji = () => {
+  const emojis = ['🧱', '🍀', '🔥', '💎', '🌈', '🎈'];
+  return emojis[Math.floor(Math.random() * emojis.length)];
+};
+
+export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, onAnimationsComplete }) {
   const [selected, setSelected] = useState(null);
-  const [matchedTiles, setMatchedTiles] = useState([]);
+  const [animatedBoard, setAnimatedBoard] = useState(board.map((row, r) =>
+    row.map((emoji) => createTile(emoji, r))
+  ));
+  const [fadingIds, setFadingIds] = useState(new Set());
 
   const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
-  const handleResolve = async (startingBoard) => {
-    let current = startingBoard;
+  const handleResolve = async (tileBoard) => {
+    let current = tileBoard;
     let chainCount = 0;
 
     while (true) {
-      const matches = findMatches(current);
+      const matches = findMatches(current.map(row => row.map(tile => tile.emoji)));
       if (matches.length === 0) break;
 
-      setMatchedTiles(matches.map(([r, c]) => `${r}-${c}`));
-      await delay(ANIMATION_DELAY);
+      const fading = new Set(matches.map(([r, c]) => current[r][c].id));
+      setFadingIds(fading);
+      setAnimatedBoard(current);
+      await delay(FADE_DELAY);
 
-      current = clearMatches(current, matches);
-      setMatchedTiles([]);
-      setBoard(current);
+      const boardWithGaps = current.map((row, r) =>
+        row.map((tile, c) =>
+          matches.find(([mr, mc]) => mr === r && mc === c) ? null : tile
+        )
+      );
+      setFadingIds(new Set());
+      setAnimatedBoard(boardWithGaps);
 
-      // Dynamic match bonus: 2^(matchLength - 3) for 4+
+      const { newBoard } = clearAndFall(boardWithGaps, matches);
+      setAnimatedBoard(newBoard);
+      await delay(FALL_DELAY + 50); // ensure visual drop finishes
+
+      const cleanedBoard = newBoard.map(row =>
+        row.map(tile => ({ id: tile.id, emoji: tile.emoji }))
+      );
+      setAnimatedBoard(cleanedBoard);
+      setBoard(cleanedBoard.map(row => row.map(tile => tile.emoji)));
+
       let matchBonus = 0;
       if (matches.length >= 4) {
         matchBonus = 2 ** (matches.length - 3);
       }
-
       const chainBonus = chainCount > 0 ? chainCount : 0;
       const totalTimeBonus = matchBonus + chainBonus;
 
-      if (matchBonus > 0) {
-        onLog(`💥 ${matches.length}-match bonus!`);
-      }
-      if (chainBonus > 0) {
-        onLog(`⛓️ Chain clear bonus!`);
-      }
+      if (matchBonus > 0) onLog(`💥 ${matches.length}-match bonus!`);
+      if (chainBonus > 0) onLog(`⛓️ Chain clear bonus!`);
       if (totalTimeBonus > 0) {
         onLog(`⏱️ +${totalTimeBonus}s time bonus!`);
         onTimeBonus(totalTimeBonus);
@@ -52,16 +74,43 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus }) 
 
       onClear(matches.length);
       chainCount++;
-
-      await delay(ANIMATION_DELAY);
+      current = cleanedBoard;
     }
+
+    onAnimationsComplete();
+  };
+
+  const clearAndFall = (tileBoard, matches) => {
+    const newBoard = tileBoard.map(row => [...row]);
+
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      const column = [];
+
+      for (let r = BOARD_SIZE - 1; r >= 0; r--) {
+        const tile = newBoard[r][c];
+        if (tile !== null) {
+          column.push({ ...tile, fromRow: r });
+        }
+      }
+
+      for (let r = BOARD_SIZE - 1; r >= 0; r--) {
+        const slot = column.shift();
+        if (slot) {
+          newBoard[r][c] = { id: slot.id, emoji: slot.emoji, fromRow: slot.fromRow };
+        } else {
+          const newTile = createTile(getRandomEmoji(), -1);
+          newBoard[r][c] = newTile;
+        }
+      }
+    }
+
+    return { newBoard };
   };
 
   const handleTileClick = (r, c) => {
     if (!selected) {
       setSelected([r, c]);
     } else if (selected[0] === r && selected[1] === c) {
-      // ✅ Deselect tile if clicked again
       setSelected(null);
     } else {
       const [r1, c1] = selected;
@@ -70,12 +119,16 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus }) 
         (Math.abs(c - c1) === 1 && r === r1);
 
       if (isAdjacent) {
-        const swapped = swapTiles(board, [r, c], selected);
-        const match = findMatches(swapped);
+        const cloned = animatedBoard.map(row => [...row]);
+        const swapped = swapTiles(cloned, [r, c], selected);
+        const match = findMatches(swapped.map(row => row.map(tile => tile.emoji)));
+
         if (match.length > 0) {
           handleResolve(swapped);
         } else {
-          setBoard(swapped); // allow unmatched swap
+          setAnimatedBoard(swapped);
+          setBoard(swapped.map(row => row.map(tile => tile.emoji)));
+          onAnimationsComplete(); // still call complete if no match
         }
         setSelected(null);
       } else {
@@ -85,18 +138,26 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus }) 
   };
 
   return (
-    <div className="grid grid-cols-6 gap-1">
-      {board.map((row, r) =>
-        row.map((tile, c) => (
-          <Tile
-            key={`${r}-${c}`}
-            emoji={tile}
-            isSelected={selected?.[0] === r && selected?.[1] === c}
-            isMatched={matchedTiles.includes(`${r}-${c}`)}
-            onClick={() => handleTileClick(r, c)}
-          />
-        ))
-      )}
+    <div className="overflow-hidden">
+      <div className="grid grid-cols-6 gap-1">
+        {animatedBoard.map((row, r) =>
+          row.map((tile, c) =>
+            tile ? (
+              <Tile
+                key={tile.id}
+                emoji={tile.emoji}
+                isSelected={selected?.[0] === r && selected?.[1] === c}
+                isFading={fadingIds.has(tile.id)}
+                fromRow={tile.fromRow}
+                actualRow={r}
+                onClick={() => handleTileClick(r, c)}
+              />
+            ) : (
+              <div key={`empty-${r}-${c}`} className="w-12 h-12" />
+            )
+          )
+        )}
+      </div>
     </div>
   );
 }
