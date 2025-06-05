@@ -9,7 +9,7 @@ import {
 const BOARD_SIZE = 6;
 const ANIMATION_DELAY = 250;
 
-export default function Board({ board, setBoard, onClear, onLog }) {
+export default function Board({ board, setBoard, onClear, onLog, onTimeBonus }) {
   const [selected, setSelected] = useState(null);
   const [matchedTiles, setMatchedTiles] = useState([]);
 
@@ -30,18 +30,27 @@ export default function Board({ board, setBoard, onClear, onLog }) {
       setMatchedTiles([]);
       setBoard(current);
 
-      const bonus =
-        matches.length >= 5 ? 2 :
-        matches.length === 4 ? 1 : 0;
-
+      // Dynamic match bonus: 2^(matchLength - 3) for 4+
+      let matchBonus = 0;
       if (matches.length >= 4) {
+        matchBonus = 2 ** (matches.length - 3);
+      }
+
+      const chainBonus = chainCount > 0 ? chainCount : 0;
+      const totalTimeBonus = matchBonus + chainBonus;
+
+      if (matchBonus > 0) {
         onLog(`💥 ${matches.length}-match bonus!`);
       }
-      if (chainCount > 0) {
+      if (chainBonus > 0) {
         onLog(`⛓️ Chain clear bonus!`);
       }
+      if (totalTimeBonus > 0) {
+        onLog(`⏱️ +${totalTimeBonus}s time bonus!`);
+        onTimeBonus(totalTimeBonus);
+      }
 
-      onClear(matches.length + bonus);
+      onClear(matches.length);
       chainCount++;
 
       await delay(ANIMATION_DELAY);

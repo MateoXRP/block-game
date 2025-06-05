@@ -53,6 +53,10 @@ export default function App() {
     });
   };
 
+  const applyTimeBonus = (seconds) => {
+    setTimeLeft(prev => prev + seconds);
+  };
+
   const logMessage = (msg) => {
     setMessages(prev => [...prev, msg]);
   };
@@ -122,6 +126,7 @@ export default function App() {
             setBoard={setBoard}
             onClear={handleClearBlocks}
             onLog={logMessage}
+            onTimeBonus={applyTimeBonus}
           />
           <MessageLog messages={messages} />
         </>
