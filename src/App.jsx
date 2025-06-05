@@ -2,6 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import Board from './components/Board.jsx';
 import HUD from './components/HUD.jsx';
 import MessageLog from './components/MessageLog.jsx';
+import GameOver from './components/GameOver.jsx';
+import LevelTransition from './components/LevelTransition.jsx';
 import { generateBoard, findMatches } from './logic/boardUtils.js';
 
 const STARTING_TIMER = 40;
@@ -45,7 +47,7 @@ export default function App() {
     setBlocksRemaining((prev) => {
       const updated = prev - count;
       if (updated <= 0) {
-        advanceLevel();
+        triggerLevelTransition();
       }
       return updated;
     });
@@ -55,11 +57,13 @@ export default function App() {
     setMessages(prev => [...prev, msg]);
   };
 
-  const advanceLevel = async () => {
+  const triggerLevelTransition = () => {
     clearInterval(timerRef.current);
     setIsLevelTransition(true);
-    setMessages([]); // Clear message log between levels
+    setMessages([]);
+  };
 
+  const continueToNextLevel = () => {
     const nextLevel = level + 1;
     const newTimer = Math.max(MIN_TIMER, STARTING_TIMER - (nextLevel - 1));
     const newTarget = BASE_TARGET + 5 * (nextLevel - 1);
@@ -68,13 +72,7 @@ export default function App() {
     setTargetBlocks(newTarget);
     setBlocksRemaining(newTarget);
     setTimeLeft(newTimer);
-
-    await delay(1500);
-
-    const newBoard = generateCleanBoard();
-    setBoard(newBoard);
-
-    await delay(500);
+    setBoard(generateCleanBoard());
     setIsLevelTransition(false);
   };
 
@@ -101,22 +99,17 @@ export default function App() {
       <h1 className="text-3xl font-bold mb-4">🧱 Block Game</h1>
 
       {isGameOver ? (
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-red-500 mb-2">💀 Game Over</h2>
-          <p className="text-lg">You reached Level {level}</p>
-          <p className="text-lg">Total Blocks Cleared: {totalCleared}</p>
-          <button
-            className="mt-4 px-4 py-2 bg-yellow-400 text-black font-bold rounded hover:bg-yellow-300"
-            onClick={resetGame}
-          >
-            🔁 Restart Game
-          </button>
-        </div>
+        <GameOver
+          level={level}
+          totalCleared={totalCleared}
+          onRestart={resetGame}
+        />
       ) : isLevelTransition ? (
-        <div className="text-center animate-pulse">
-          <h2 className="text-2xl font-bold text-yellow-300 mb-2">⚔️ Level {level}</h2>
-          <p className="text-lg">Get ready!</p>
-        </div>
+        <LevelTransition
+          level={level + 1}
+          totalCleared={totalCleared}
+          onContinue={continueToNextLevel}
+        />
       ) : (
         <>
           <HUD
