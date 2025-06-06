@@ -7,10 +7,11 @@ const BOARD_SIZE = 6;
 const PAUSE_DELAY = 300;
 const FALL_DELAY = 200;
 
-const createTile = (emoji, fromRow = undefined) => ({
+const createTile = (emoji, fromRow = undefined, fromCol = undefined) => ({
   id: nanoid(),
   emoji,
   fromRow,
+  fromCol,
 });
 
 const getRandomEmoji = () => {
@@ -21,7 +22,7 @@ const getRandomEmoji = () => {
 export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, onAnimationsComplete }) {
   const [selected, setSelected] = useState(null);
   const [animatedBoard, setAnimatedBoard] = useState(board.map((row, r) =>
-    row.map((emoji) => createTile(emoji, r))
+    row.map((emoji, c) => createTile(emoji, r, c))
   ));
   const [highlightIds, setHighlightIds] = useState(new Set());
 
@@ -49,8 +50,8 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
       setAnimatedBoard(newBoard);
       await delay(FALL_DELAY + 50);
 
-      const cleanedBoard = newBoard.map(row =>
-        row.map(tile => ({ id: tile.id, emoji: tile.emoji }))
+      const cleanedBoard = newBoard.map((row, r) =>
+        row.map((tile, c) => ({ id: tile.id, emoji: tile.emoji }))
       );
       setAnimatedBoard(cleanedBoard);
       setBoard(cleanedBoard.map(row => row.map(tile => tile.emoji)));
@@ -86,16 +87,16 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
       for (let r = BOARD_SIZE - 1; r >= 0; r--) {
         const tile = newBoard[r][c];
         if (tile !== null) {
-          column.push({ ...tile, fromRow: r });
+          column.push({ ...tile, fromRow: r, fromCol: c });
         }
       }
 
       for (let r = BOARD_SIZE - 1; r >= 0; r--) {
         const slot = column.shift();
         if (slot) {
-          newBoard[r][c] = { id: slot.id, emoji: slot.emoji, fromRow: slot.fromRow };
+          newBoard[r][c] = { id: slot.id, emoji: slot.emoji, fromRow: slot.fromRow, fromCol: slot.fromCol };
         } else {
-          const newTile = createTile(getRandomEmoji(), -1);
+          const newTile = createTile(getRandomEmoji(), -1, c);
           newBoard[r][c] = newTile;
         }
       }
@@ -118,7 +119,15 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
         (Math.abs(c - c1) === 1 && r === r1);
 
       if (isAdjacent) {
-        const cloned = animatedBoard.map(row => row.map(tile => ({ ...tile })));
+        // 💡 Inject current positions as animation start points
+        const cloned = animatedBoard.map((row, rowIndex) =>
+          row.map((tile, colIndex) => ({
+            ...tile,
+            fromRow: rowIndex,
+            fromCol: colIndex
+          }))
+        );
+
         const swapped = swapTiles(cloned, [r, c], selected);
         const match = findMatches(swapped.map(row => row.map(tile => tile.emoji)));
 
@@ -151,6 +160,8 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
                 isFading={highlightIds.has(tile.id)}
                 fromRow={tile.fromRow}
                 actualRow={r}
+                fromCol={tile.fromCol}
+                actualCol={c}
                 onClick={() => handleTileClick(r, c)}
               />
             ) : (
