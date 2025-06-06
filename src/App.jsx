@@ -50,9 +50,7 @@ export default function App() {
     });
   };
 
-  const handleAnimationsComplete = () => {
-    // No longer needed to check blocksRemaining here
-  };
+  const handleAnimationsComplete = () => {};
 
   const applyTimeBonus = (seconds) => {
     setTimeLeft(prev => prev + seconds);
@@ -99,40 +97,45 @@ export default function App() {
     setTotalCleared(0);
   };
 
+  const timePercent = (timeLeft / STARTING_TIMER) * 100;
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center">
       <h1 className="text-3xl font-bold mb-4">🧱 Block Game</h1>
 
-      {isGameOver ? (
-        <GameOver
-          level={level}
-          totalCleared={totalCleared}
-          onRestart={resetGame}
-        />
-      ) : isLevelTransition ? (
-        <LevelTransition
-          level={level + 1}
-          totalCleared={totalCleared}
-          onContinue={continueToNextLevel}
-        />
-      ) : (
-        <>
-          <HUD
+      <div className="w-full max-w-[320px] px-2">
+        {isGameOver ? (
+          <GameOver
             level={level}
-            blocksRemaining={blocksRemaining}
-            timeLeft={timeLeft}
+            totalCleared={totalCleared}
+            onRestart={resetGame}
           />
-          <Board
-            board={board}
-            setBoard={setBoard}
-            onClear={handleClearBlocks}
-            onLog={logMessage}
-            onTimeBonus={applyTimeBonus}
-            onAnimationsComplete={handleAnimationsComplete}
+        ) : isLevelTransition ? (
+          <LevelTransition
+            level={level + 1}
+            totalCleared={totalCleared}
+            onContinue={continueToNextLevel}
           />
-          <MessageLog messages={messages} />
-        </>
-      )}
+        ) : (
+          <>
+            <HUD
+              level={level}
+              blocksRemaining={blocksRemaining}
+              timeLeft={timeLeft}
+              timePercent={timePercent}
+            />
+            <Board
+              board={board}
+              setBoard={setBoard}
+              onClear={handleClearBlocks}
+              onLog={logMessage}
+              onTimeBonus={applyTimeBonus}
+              onAnimationsComplete={handleAnimationsComplete}
+            />
+            <MessageLog messages={messages} />
+          </>
+        )}
+      </div>
     </div>
   );
 }
