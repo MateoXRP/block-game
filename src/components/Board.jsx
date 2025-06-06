@@ -7,6 +7,7 @@ import { nanoid } from 'nanoid';
 const BOARD_SIZE = 6;
 const PAUSE_DELAY = 300;
 const FALL_DELAY = 200;
+const BOMB_EMOJI = '💣';
 
 const createTile = (emoji, fromRow = undefined, fromCol = undefined) => ({
   id: nanoid(),
@@ -31,14 +32,12 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
   const groupMatches = (matches) => {
     const visited = new Set();
     const groups = [];
-
     const key = (r, c) => `${r},${c}`;
     const neighbors = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
     for (const [r, c] of matches) {
       const k = key(r, c);
       if (visited.has(k)) continue;
-
       const queue = [[r, c]];
       const group = [];
 
@@ -46,7 +45,6 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
         const [cr, cc] = queue.pop();
         const ck = key(cr, cc);
         if (visited.has(ck)) continue;
-
         visited.add(ck);
         group.push([cr, cc]);
 
@@ -66,23 +64,65 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
     return groups;
   };
 
-  const handleResolve = async (tileBoard) => {
+  const getNeighbors = (r, c) => {
+    const deltas = [
+      [-1, -1], [-1, 0], [-1, 1],
+      [0, -1],          [0, 1],
+      [1, -1], [1, 0],  [1, 1],
+    ];
+    return deltas
+      .map(([dr, dc]) => [r + dr, c + dc])
+      .filter(([nr, nc]) => nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE);
+  };
+
+  const handleResolve = async (tileBoard, forcedMatches = null, isFromBomb = false) => {
     let current = tileBoard;
     let chainCount = 0;
 
     while (true) {
-      const matches = findMatches(current.map(row => row.map(tile => tile.emoji)));
-      if (matches.length === 0) break;
+      let matches;
 
-      const matchIds = new Set(matches.map(([r, c]) => current[r][c].id));
+      if (forcedMatches) {
+        matches = forcedMatches;
+        forcedMatches = null;
+      } else {
+        const baseEmojis = current.map(row => row.map(tile => tile.emoji));
+        const baseMatches = findMatches(baseEmojis);
+
+        // Expand bombs to include neighbors
+        matches = [...baseMatches];
+        for (const [r, c] of baseMatches) {
+          if (current[r][c].emoji === BOMB_EMOJI) {
+            const neighbors = getNeighbors(r, c);
+            matches.push(...neighbors);
+          }
+        }
+      }
+
+      const deduped = Array.from(new Set(matches.map(([r, c]) => `${r},${c}`)))
+        .map(str => str.split(',').map(Number));
+      if (deduped.length === 0) break;
+
+      const matchIds = new Set(deduped.map(([r, c]) => current[r][c].id));
       setHighlightIds(matchIds);
       await delay(PAUSE_DELAY);
+      setHighlightIds(new Set());
 
       const boardWithGaps = current.map(row =>
         row.map(tile => (tile && matchIds.has(tile.id) ? null : tile))
       );
 
-      setHighlightIds(new Set());
+      // 💣 No new bombs from bomb-triggered clears
+      if (!isFromBomb) {
+        const grouped = groupMatches(deduped);
+        for (const group of grouped) {
+          if (group.length >= 5) {
+            const [br, bc] = group[Math.floor(Math.random() * group.length)];
+            boardWithGaps[br][bc] = createTile(BOMB_EMOJI, br, bc);
+            onLog('💣 Bomb created!');
+          }
+        }
+      }
 
       const { newBoard } = clearAndFall(boardWithGaps);
       setAnimatedBoard(newBoard);
@@ -94,23 +134,23 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
       setAnimatedBoard(cleanedBoard);
       setBoard(cleanedBoard.map(row => row.map(tile => tile.emoji)));
 
-      const grouped = groupMatches(matches);
-      const largestMatchSize = Math.max(...grouped.map(g => g.length), 0);
+      if (!isFromBomb) {
+        const grouped = groupMatches(deduped);
+        const largestMatchSize = Math.max(...grouped.map(g => g.length), 0);
+        let matchBonus = largestMatchSize >= 5 ? 2 : (largestMatchSize === 4 ? 1 : 0);
+        const chainBonus = chainCount > 1 ? 1 : 0;
+        let totalTimeBonus = matchBonus + chainBonus;
+        totalTimeBonus = Math.min(totalTimeBonus, 3);
 
-      // ✅ NEW: Corrected time bonus logic
-      let matchBonus = largestMatchSize >= 5 ? 2 : (largestMatchSize === 4 ? 1 : 0);
-      const chainBonus = chainCount > 1 ? 1 : 0;
-      let totalTimeBonus = matchBonus + chainBonus;
-      totalTimeBonus = Math.min(totalTimeBonus, 3);
-
-      if (largestMatchSize >= 4) onLog(`💥 ${largestMatchSize}-match bonus!`);
-      if (chainBonus > 0) onLog(`⛓️ Chain clear bonus!`);
-      if (totalTimeBonus > 0) {
-        onLog(`⏱️ +${totalTimeBonus}s time bonus!`);
-        onTimeBonus(totalTimeBonus);
+        if (largestMatchSize >= 4) onLog(`💥 ${largestMatchSize}-match bonus!`);
+        if (chainBonus > 0) onLog(`⛓️ Chain clear bonus!`);
+        if (totalTimeBonus > 0) {
+          onLog(`⏱️ +${totalTimeBonus}s time bonus!`);
+          onTimeBonus(totalTimeBonus);
+        }
       }
 
-      onClear(matches.length);
+      onClear(deduped.length);
       chainCount++;
       current = cleanedBoard;
     }
@@ -168,17 +208,30 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
         );
 
         const swapped = swapTiles(cloned, [r, c], selected);
-        const match = findMatches(swapped.map(row => row.map(tile => tile.emoji)));
+        const emojiA = swapped[r][c].emoji;
+        const emojiB = swapped[r1][c1].emoji;
 
-        if (match.length > 0) {
+        if (emojiA === BOMB_EMOJI || emojiB === BOMB_EMOJI) {
+          const [br, bc] = emojiA === BOMB_EMOJI ? [r, c] : [r1, c1];
+          const explosion = [[br, bc], ...getNeighbors(br, bc)];
+
           setAnimatedBoard(swapped);
-          await new Promise(resolve => requestAnimationFrame(resolve));
-          handleResolve(swapped);
+          await new Promise(res => requestAnimationFrame(res));
+          await handleResolve(swapped, explosion, true);
         } else {
-          setAnimatedBoard(swapped);
-          setBoard(swapped.map(row => row.map(tile => tile.emoji)));
-          onAnimationsComplete();
+          const match = findMatches(swapped.map(row => row.map(tile => tile.emoji)));
+
+          if (match.length > 0) {
+            setAnimatedBoard(swapped);
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            await handleResolve(swapped);
+          } else {
+            setAnimatedBoard(swapped);
+            setBoard(swapped.map(row => row.map(tile => tile.emoji)));
+            onAnimationsComplete();
+          }
         }
+
         setSelected(null);
       } else {
         setSelected([r, c]);
