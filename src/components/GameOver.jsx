@@ -1,3 +1,6 @@
+// src/components/GameOver.jsx
+import Leaderboard from './Leaderboard.jsx';
+
 export default function GameOver({ level, totalCleared, onRestart }) {
   return (
     <div className="text-center">
@@ -10,6 +13,8 @@ export default function GameOver({ level, totalCleared, onRestart }) {
       >
         🔁 Restart Game
       </button>
+
+      <Leaderboard />
     </div>
   );
 }

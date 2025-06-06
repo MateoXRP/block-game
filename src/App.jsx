@@ -6,12 +6,16 @@ import GameOver from './components/GameOver.jsx';
 import LevelTransition from './components/LevelTransition.jsx';
 import { generateBoard, findMatches } from './logic/boardUtils.js';
 import { getShuffledEmojiSets } from './logic/emojiSets.js';
+import { db } from './firebase.js';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 const STARTING_TIMER = 40;
 const MIN_TIMER = 10;
 const BASE_TARGET = 20;
 
 export default function App() {
+  const [playerName, setPlayerName] = useState('');
+  const [nameInput, setNameInput] = useState('');
   const [level, setLevel] = useState(1);
   const [emojiSetOrder] = useState(getShuffledEmojiSets);
   const emojiSet = useMemo(() => emojiSetOrder[(level - 1) % emojiSetOrder.length], [level, emojiSetOrder]);
@@ -23,16 +27,20 @@ export default function App() {
   const [isLevelTransition, setIsLevelTransition] = useState(false);
   const [messages, setMessages] = useState([]);
   const [totalCleared, setTotalCleared] = useState(0);
+  const totalClearedRef = useRef(0); // ✅ capture latest totalCleared for writes
   const timerRef = useRef(null);
+  const hasSubmittedScore = useRef(false);
 
   useEffect(() => {
-    if (isGameOver || isLevelTransition) return;
+    if (isGameOver || isLevelTransition || !playerName) return;
 
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
-          handleGameOver();
+          setTimeout(() => {
+            handleGameOver();
+          }, 0);
           return 0;
         }
         return prev - 1;
@@ -40,10 +48,14 @@ export default function App() {
     }, 1000);
 
     return () => clearInterval(timerRef.current);
-  }, [level, isGameOver, isLevelTransition]);
+  }, [level, isGameOver, isLevelTransition, playerName]);
 
   const handleClearBlocks = (count) => {
-    setTotalCleared((prev) => prev + count);
+    setTotalCleared((prev) => {
+      const updated = prev + count;
+      totalClearedRef.current = updated; // ✅ update ref value
+      return updated;
+    });
     setBlocksRemaining((prev) => {
       const newRemaining = prev - count;
       if (newRemaining <= 0) {
@@ -84,13 +96,37 @@ export default function App() {
     setIsLevelTransition(false);
   };
 
-  const handleGameOver = () => {
+  const handleGameOver = async () => {
+    if (hasSubmittedScore.current || !playerName) return;
+    hasSubmittedScore.current = true;
+
     setIsGameOver(true);
-    console.log('Game Over – hook Firebase here later');
+
+    const cleared = totalClearedRef.current;
+    const ref = doc(db, "block_leaderboard", playerName);
+    const snapshot = await getDoc(ref);
+
+    if (!snapshot.exists()) {
+      await setDoc(ref, {
+        name: playerName,
+        bestRun: cleared,
+        totalBlocks: cleared,
+      });
+    } else {
+      const data = snapshot.data();
+      await updateDoc(ref, {
+        bestRun: Math.max(data.bestRun, cleared),
+        totalBlocks: data.totalBlocks + cleared,
+      });
+    }
+
+    console.log('🔥 Game Over – Score submitted to Firebase');
   };
 
   const resetGame = () => {
     clearInterval(timerRef.current);
+    hasSubmittedScore.current = false;
+    totalClearedRef.current = 0;
     const baseEmojiSet = emojiSetOrder[0];
     const baseBoard = generateCleanBoard(baseEmojiSet);
 
@@ -107,6 +143,28 @@ export default function App() {
 
   const timePercent = (timeLeft / STARTING_TIMER) * 100;
   const blockPercent = (blocksRemaining / targetBlocks) * 100;
+
+  if (!playerName) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-center space-y-4">
+        <h1 className="text-3xl font-bold">🧱 Block Game</h1>
+        <input
+          className="px-4 py-2 text-black rounded"
+          placeholder="Enter your name"
+          value={nameInput}
+          onChange={(e) => setNameInput(e.target.value)}
+        />
+        <button
+          className="px-4 py-2 bg-yellow-400 text-black font-bold rounded hover:bg-yellow-300"
+          onClick={() => {
+            if (nameInput.trim()) setPlayerName(nameInput.trim());
+          }}
+        >
+          ▶️ Start Game
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center">
