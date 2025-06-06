@@ -37,7 +37,7 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
 
       const matchIds = new Set(matches.map(([r, c]) => current[r][c].id));
       setHighlightIds(matchIds);
-      await delay(PAUSE_DELAY);
+      await delay(PAUSE_DELAY); // pause visibly
 
       const boardWithGaps = current.map(row =>
         row.map(tile => (tile && matchIds.has(tile.id) ? null : tile))
@@ -55,12 +55,11 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
       setAnimatedBoard(cleanedBoard);
       setBoard(cleanedBoard.map(row => row.map(tile => tile.emoji)));
 
-      let matchBonus = 0;
-      if (matches.length >= 4) {
-        matchBonus = 2 ** (matches.length - 3);
-      }
-      const chainBonus = chainCount > 0 ? chainCount : 0;
-      const totalTimeBonus = matchBonus + chainBonus;
+      // Updated time bonus logic
+      let matchBonus = matches.length >= 5 ? 2 : 1;
+      const chainBonus = chainCount > 1 ? 1 : 0;
+      let totalTimeBonus = matchBonus + chainBonus;
+      totalTimeBonus = Math.min(totalTimeBonus, 3); // cap max bonus
 
       if (matchBonus > 0) onLog(`💥 ${matches.length}-match bonus!`);
       if (chainBonus > 0) onLog(`⛓️ Chain clear bonus!`);
