@@ -1,5 +1,6 @@
 // src/App.jsx
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import Cookies from 'js-cookie';
 import Board from './components/Board.jsx';
 import HUD from './components/HUD.jsx';
 import MessageLog from './components/MessageLog.jsx';
@@ -11,6 +12,11 @@ import { useGameEngine } from './hooks/useGameEngine.js';
 export default function App() {
   const [playerName, setPlayerName] = useState('');
   const [nameInput, setNameInput] = useState('');
+
+  useEffect(() => {
+    const savedName = Cookies.get('blockGameName');
+    if (savedName) setPlayerName(savedName);
+  }, []);
 
   const {
     level,
@@ -34,7 +40,13 @@ export default function App() {
   } = useGameEngine(playerName);
 
   const handleAnimationsComplete = () => {
-    // no-op (placeholder if needed later)
+    // no-op
+  };
+
+  const signOut = () => {
+    Cookies.remove('blockGameName');
+    setPlayerName('');
+    resetGame();
   };
 
   if (!playerName) {
@@ -43,7 +55,11 @@ export default function App() {
         nameInput={nameInput}
         setNameInput={setNameInput}
         onStart={() => {
-          if (nameInput.trim()) setPlayerName(nameInput.trim());
+          if (nameInput.trim()) {
+            const trimmed = nameInput.trim();
+            setPlayerName(trimmed);
+            Cookies.set('blockGameName', trimmed);
+          }
         }}
       />
     );
@@ -56,6 +72,7 @@ export default function App() {
         level={level}
         totalCleared={totalCleared}
         onRestart={resetGame}
+        onSignOut={signOut}
       />
     );
   } else if (isLevelTransition) {
