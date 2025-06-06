@@ -1,3 +1,4 @@
+// src/components/Board.jsx
 import { useState } from 'react';
 import Tile from './Tile.jsx';
 import { swapTiles, findMatches } from '../logic/boardUtils.js';
@@ -96,7 +97,8 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
       const grouped = groupMatches(matches);
       const largestMatchSize = Math.max(...grouped.map(g => g.length), 0);
 
-      let matchBonus = largestMatchSize >= 5 ? 2 : 1;
+      // ✅ NEW: Corrected time bonus logic
+      let matchBonus = largestMatchSize >= 5 ? 2 : (largestMatchSize === 4 ? 1 : 0);
       const chainBonus = chainCount > 1 ? 1 : 0;
       let totalTimeBonus = matchBonus + chainBonus;
       totalTimeBonus = Math.min(totalTimeBonus, 3);
