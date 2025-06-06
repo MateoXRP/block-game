@@ -1,9 +1,11 @@
+// src/App.jsx
 import { useEffect, useState, useRef, useMemo } from 'react';
 import Board from './components/Board.jsx';
 import HUD from './components/HUD.jsx';
 import MessageLog from './components/MessageLog.jsx';
 import GameOver from './components/GameOver.jsx';
 import LevelTransition from './components/LevelTransition.jsx';
+import LoginScreen from './components/LoginScreen.jsx';
 import { generateBoard, findMatches } from './logic/boardUtils.js';
 import { getShuffledEmojiSets } from './logic/emojiSets.js';
 import { db } from './firebase.js';
@@ -27,7 +29,7 @@ export default function App() {
   const [isLevelTransition, setIsLevelTransition] = useState(false);
   const [messages, setMessages] = useState([]);
   const [totalCleared, setTotalCleared] = useState(0);
-  const totalClearedRef = useRef(0); // ✅ capture latest totalCleared for writes
+  const totalClearedRef = useRef(0);
   const timerRef = useRef(null);
   const hasSubmittedScore = useRef(false);
 
@@ -53,7 +55,7 @@ export default function App() {
   const handleClearBlocks = (count) => {
     setTotalCleared((prev) => {
       const updated = prev + count;
-      totalClearedRef.current = updated; // ✅ update ref value
+      totalClearedRef.current = updated;
       return updated;
     });
     setBlocksRemaining((prev) => {
@@ -146,64 +148,62 @@ export default function App() {
 
   if (!playerName) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-center space-y-4">
-        <h1 className="text-3xl font-bold">🧱 Block Game</h1>
-        <input
-          className="px-4 py-2 text-black rounded"
-          placeholder="Enter your name"
-          value={nameInput}
-          onChange={(e) => setNameInput(e.target.value)}
+      <LoginScreen
+        nameInput={nameInput}
+        setNameInput={setNameInput}
+        onStart={() => {
+          if (nameInput.trim()) setPlayerName(nameInput.trim());
+        }}
+      />
+    );
+  }
+
+  let content;
+  if (isGameOver) {
+    content = (
+      <GameOver
+        level={level}
+        totalCleared={totalCleared}
+        onRestart={resetGame}
+      />
+    );
+  } else if (isLevelTransition) {
+    content = (
+      <LevelTransition
+        level={level + 1}
+        totalCleared={totalCleared}
+        onContinue={continueToNextLevel}
+      />
+    );
+  } else {
+    content = (
+      <>
+        <HUD
+          level={level}
+          blocksRemaining={blocksRemaining}
+          timeLeft={timeLeft}
+          timePercent={timePercent}
+          blockPercent={blockPercent}
         />
-        <button
-          className="px-4 py-2 bg-yellow-400 text-black font-bold rounded hover:bg-yellow-300"
-          onClick={() => {
-            if (nameInput.trim()) setPlayerName(nameInput.trim());
-          }}
-        >
-          ▶️ Start Game
-        </button>
-      </div>
+        <Board
+          board={board}
+          setBoard={setBoard}
+          onClear={handleClearBlocks}
+          onLog={logMessage}
+          onTimeBonus={applyTimeBonus}
+          onAnimationsComplete={handleAnimationsComplete}
+          emojiSet={emojiSet}
+        />
+        <MessageLog messages={messages} />
+      </>
     );
   }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center">
       <h1 className="text-3xl font-bold mb-4">🧱 Block Game</h1>
-
       <div className="w-full max-w-[320px] px-2">
-        {isGameOver ? (
-          <GameOver
-            level={level}
-            totalCleared={totalCleared}
-            onRestart={resetGame}
-          />
-        ) : isLevelTransition ? (
-          <LevelTransition
-            level={level + 1}
-            totalCleared={totalCleared}
-            onContinue={continueToNextLevel}
-          />
-        ) : (
-          <>
-            <HUD
-              level={level}
-              blocksRemaining={blocksRemaining}
-              timeLeft={timeLeft}
-              timePercent={timePercent}
-              blockPercent={blockPercent}
-            />
-            <Board
-              board={board}
-              setBoard={setBoard}
-              onClear={handleClearBlocks}
-              onLog={logMessage}
-              onTimeBonus={applyTimeBonus}
-              onAnimationsComplete={handleAnimationsComplete}
-              emojiSet={emojiSet}
-            />
-            <MessageLog messages={messages} />
-          </>
-        )}
+        {content}
       </div>
     </div>
   );
