@@ -27,6 +27,44 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
 
   const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
+  const groupMatches = (matches) => {
+    const visited = new Set();
+    const groups = [];
+
+    const key = (r, c) => `${r},${c}`;
+    const neighbors = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+    for (const [r, c] of matches) {
+      const k = key(r, c);
+      if (visited.has(k)) continue;
+
+      const queue = [[r, c]];
+      const group = [];
+
+      while (queue.length) {
+        const [cr, cc] = queue.pop();
+        const ck = key(cr, cc);
+        if (visited.has(ck)) continue;
+
+        visited.add(ck);
+        group.push([cr, cc]);
+
+        for (const [dr, dc] of neighbors) {
+          const nr = cr + dr;
+          const nc = cc + dc;
+          const nk = key(nr, nc);
+          if (matches.some(([mr, mc]) => mr === nr && mc === nc) && !visited.has(nk)) {
+            queue.push([nr, nc]);
+          }
+        }
+      }
+
+      if (group.length > 0) groups.push(group);
+    }
+
+    return groups;
+  };
+
   const handleResolve = async (tileBoard) => {
     let current = tileBoard;
     let chainCount = 0;
@@ -37,7 +75,7 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
 
       const matchIds = new Set(matches.map(([r, c]) => current[r][c].id));
       setHighlightIds(matchIds);
-      await delay(PAUSE_DELAY); // pause visibly
+      await delay(PAUSE_DELAY);
 
       const boardWithGaps = current.map(row =>
         row.map(tile => (tile && matchIds.has(tile.id) ? null : tile))
@@ -55,13 +93,15 @@ export default function Board({ board, setBoard, onClear, onLog, onTimeBonus, on
       setAnimatedBoard(cleanedBoard);
       setBoard(cleanedBoard.map(row => row.map(tile => tile.emoji)));
 
-      // Updated time bonus logic
-      let matchBonus = matches.length >= 5 ? 2 : 1;
+      const grouped = groupMatches(matches);
+      const largestMatchSize = Math.max(...grouped.map(g => g.length), 0);
+
+      let matchBonus = largestMatchSize >= 5 ? 2 : 1;
       const chainBonus = chainCount > 1 ? 1 : 0;
       let totalTimeBonus = matchBonus + chainBonus;
-      totalTimeBonus = Math.min(totalTimeBonus, 3); // cap max bonus
+      totalTimeBonus = Math.min(totalTimeBonus, 3);
 
-      if (matchBonus > 0) onLog(`💥 ${matches.length}-match bonus!`);
+      if (largestMatchSize >= 4) onLog(`💥 ${largestMatchSize}-match bonus!`);
       if (chainBonus > 0) onLog(`⛓️ Chain clear bonus!`);
       if (totalTimeBonus > 0) {
         onLog(`⏱️ +${totalTimeBonus}s time bonus!`);
