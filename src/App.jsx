@@ -1,18 +1,21 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import Board from './components/Board.jsx';
 import HUD from './components/HUD.jsx';
 import MessageLog from './components/MessageLog.jsx';
 import GameOver from './components/GameOver.jsx';
 import LevelTransition from './components/LevelTransition.jsx';
 import { generateBoard, findMatches } from './logic/boardUtils.js';
+import { getShuffledEmojiSets } from './logic/emojiSets.js';
 
 const STARTING_TIMER = 40;
 const MIN_TIMER = 10;
 const BASE_TARGET = 20;
 
 export default function App() {
-  const [board, setBoard] = useState(generateCleanBoard());
   const [level, setLevel] = useState(1);
+  const [emojiSetOrder] = useState(getShuffledEmojiSets);
+  const emojiSet = useMemo(() => emojiSetOrder[(level - 1) % emojiSetOrder.length], [level, emojiSetOrder]);
+  const [board, setBoard] = useState(() => generateCleanBoard(emojiSet));
   const [targetBlocks, setTargetBlocks] = useState(BASE_TARGET);
   const [blocksRemaining, setBlocksRemaining] = useState(BASE_TARGET);
   const [timeLeft, setTimeLeft] = useState(STARTING_TIMER);
@@ -70,12 +73,14 @@ export default function App() {
     const nextLevel = level + 1;
     const newTimer = Math.max(MIN_TIMER, STARTING_TIMER - (nextLevel - 1));
     const newTarget = BASE_TARGET + 5 * (nextLevel - 1);
+    const nextEmojiSet = emojiSetOrder[(nextLevel - 1) % emojiSetOrder.length];
+    const newBoard = generateCleanBoard(nextEmojiSet);
 
     setLevel(nextLevel);
     setTargetBlocks(newTarget);
     setBlocksRemaining(newTarget);
     setTimeLeft(newTimer);
-    setBoard(generateCleanBoard());
+    setBoard(newBoard);
     setIsLevelTransition(false);
   };
 
@@ -86,8 +91,11 @@ export default function App() {
 
   const resetGame = () => {
     clearInterval(timerRef.current);
-    setBoard(generateCleanBoard());
+    const baseEmojiSet = emojiSetOrder[0];
+    const baseBoard = generateCleanBoard(baseEmojiSet);
+
     setLevel(1);
+    setBoard(baseBoard);
     setTargetBlocks(BASE_TARGET);
     setBlocksRemaining(BASE_TARGET);
     setTimeLeft(STARTING_TIMER);
@@ -133,6 +141,7 @@ export default function App() {
               onLog={logMessage}
               onTimeBonus={applyTimeBonus}
               onAnimationsComplete={handleAnimationsComplete}
+              emojiSet={emojiSet}
             />
             <MessageLog messages={messages} />
           </>
@@ -142,10 +151,10 @@ export default function App() {
   );
 }
 
-function generateCleanBoard(rows = 6, cols = 6) {
+function generateCleanBoard(emojiSet, rows = 6, cols = 6) {
   let board;
   do {
-    board = generateBoard(rows, cols);
+    board = generateBoard(rows, cols, emojiSet);
   } while (findMatches(board).length > 0);
   return board;
 }
