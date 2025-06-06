@@ -98,6 +98,7 @@ export default function App() {
   };
 
   const timePercent = (timeLeft / STARTING_TIMER) * 100;
+  const blockPercent = (blocksRemaining / targetBlocks) * 100;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center">
@@ -123,6 +124,7 @@ export default function App() {
               blocksRemaining={blocksRemaining}
               timeLeft={timeLeft}
               timePercent={timePercent}
+              blockPercent={blockPercent}
             />
             <Board
               board={board}
