@@ -91,9 +91,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 overflow-x-hidden">
       <h1 className="text-3xl font-bold mb-4">🧱 Block Game</h1>
-      <div className="w-full max-w-[320px] px-2">
+      <div className="w-full max-w-[320px]">
         {content}
       </div>
     </div>
