@@ -41,13 +41,17 @@ export default function App() {
 
   const handleClearBlocks = (count) => {
     setTotalCleared((prev) => prev + count);
-    setBlocksRemaining((prev) => prev - count);
+    setBlocksRemaining((prev) => {
+      const newRemaining = prev - count;
+      if (newRemaining <= 0) {
+        triggerLevelTransition();
+      }
+      return newRemaining;
+    });
   };
 
   const handleAnimationsComplete = () => {
-    if (blocksRemaining <= 0) {
-      triggerLevelTransition();
-    }
+    // No longer needed to check blocksRemaining here
   };
 
   const applyTimeBonus = (seconds) => {
